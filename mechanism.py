@@ -3,6 +3,32 @@
 from sympy import Symbol, sin, cos, atan, nsolve, linsolve
 import numpy as np
 
+
+'''
+Vectors represented as [x, y, z], point a is origin
+R -> position vectors, r  = ||R|| (distance scalar)
+'''
+
+# distances between points
+r_ab = 15.0
+r_bc = 50.0
+r_bd = 61.9
+r_ce = 41.5
+r_cf = 55.8
+r_de = 39.3
+r_dg = 36.7
+r_dh = 49.0
+r_ef = 40.1
+r_fg = 39.4
+r_gh = 65.7
+
+theta = 0
+pos = {}        # {A, B, C, D, E, F, G, H}
+vel = {}        # {A, B, C, D, E, F, G, H}
+ang_vel = {}    # {W_2, W_3, W_4, W_5, W_6, W_7, W_8}
+accl = {}       # {A, B, C, D, E, F, G, H}
+ang_accl = {}   # {Alph_2, Alph_3, Alph_4, Alph_5, Alph_6, Alph_7, Alph_8}
+
 '''
 solve for angle phi between R and global x axis (i)
 note: phi will have two solutions: phi, phi + pi, 
@@ -58,9 +84,6 @@ def solve_pos(R_xo, R_yo, r_zx, r_zy):
     R_zx_2 = np.array([r_zx*cos(phi - alpha_sol), r_zx*sin(phi - alpha_sol), 0], dtype=np.float64)
     R_zo_2 = R_xo + R_zx_2
 
-    # print("solution 1: ", R_zo_1)
-    # print("solution 2: ", R_zo_2)
-
     return (R_zo_1, R_zo_2)
 
 
@@ -93,6 +116,7 @@ def solve_Ws(V_x2, R_zx, V_y3, R_zy):
     _W_3 = np.array([0., 0., sol_list[0][1]], dtype=np.float64)
     return (_W_2, _W_3) 
 
+
 '''
 Solve system of equations of the form: 
 A_z2 = A_z3
@@ -114,30 +138,222 @@ def solve_Alphs(A_x2, R_zx, Omeg_2, A_y3, R_zy, Omeg_3):
 
     return _Alph_2, _Alph_3
 
-'''
-Vectors represented as [x, y, z], point a is origin
-R -> position vectors, r  = ||R|| (distance scalar)
-'''
-
-# distances between points
-r_ab = 15.0
-r_bc = 50.0
-r_bd = 61.9
-r_ce = 41.5
-r_cf = 55.8
-r_de = 39.3
-r_dg = 36.7
-r_dh = 49.0
-r_ef = 40.1
-r_fg = 39.4
-r_gh = 65.7
 
 '''
-INITIAL STATE at theta = 0
+Choose the next position from several solutions that
+corresponds to having the shortest  distance from the previous position
+of the point 
+@param pos_solutions - tuple of numpy arrays corresponding to solution
+@param previous_pos - numpy array of previous position vector
+
+@return chosen solution
 '''
-# POSITION ANALYSIS
+def choose_closest(pos_solutions, previous_pos):
+
+    chosen_sol = None
+    closest_dist = None
+
+    for sol in pos_solutions:
+
+        if(chosen_sol is None):
+            chosen_sol = sol
+            closest_dist = np.linalg.norm(sol)
+            continue
+        
+        curr_sol_dist = np.linalg.norm(sol)
+        if (curr_sol_dist < closest_dist):
+            chosen_sol = sol
+            closest_dist = curr_sol_dist
+    
+    return chosen_sol
+
+
+
+'''
+Determines all position vectors given input angle theta. 
+To resolve ambiguities, position tuple of previous iteration is used
+such that position of X chosen is closest to the position of X for theta - d(theta)
+
+Updates pos dictionary with new positions
+'''
+def position_analysis(theta):
+    
+    # fixed points
+    R_ao = np.array([0., 0., 0.], dtype=np.float64)
+    R_eo = np.array([-38, -7.8, 0.], dtype=np.float64)
+
+    # determined points
+    R_bo = np.array([r_ab*np.cos(theta), r_ab*np.sin(theta), 0.], dtype=np.float64)
+    R_co = choose_closest(solve_pos(R_eo, R_bo, r_ce, r_bc), pos['C'])
+    R_fo = choose_closest(solve_pos(R_eo, R_co, r_ef, r_cf), pos['F'])
+    R_do = choose_closest(solve_pos(R_eo, R_bo, r_de, r_bd), pos['D'])
+    R_go = choose_closest(solve_pos(R_do, R_fo, r_dg, r_fg), pos['G'])
+    R_ho = choose_closest(solve_pos(R_go, R_do, r_gh, r_dh), pos['H'])
+
+    # update pos dict
+    pos['A'] = R_ao
+    pos['B'] = R_bo
+    pos['C'] = R_co
+    pos['D'] = R_do
+    pos['E'] = R_eo
+    pos['F'] = R_fo
+    pos['G'] = R_go
+    pos['H'] = R_ho
+
+    return
+
+'''
+Determine all velocity vectors given input angular velocity W_2. 
+To be invoked after position_analysis to use updated position vectors
+
+update vel and ang_vel dictionaries with new values
+'''
+def velocity_analysis(W_2):
+
+    # get current positions
+    R_ao = pos['A']
+    R_bo = pos['B']
+    R_co = pos['C']
+    R_do = pos['D']
+    R_eo = pos['E']
+    R_fo = pos['F']
+    R_go = pos['G']
+    R_ho = pos['H']
+    
+    # fixed points
+    V_a2 = np.array([0., 0., 0.], dtype=np.float64)         # A
+    V_e6 = V_e5 = np.array([0., 0., 0.], dtype=np.float64)  # E
+
+    # determined points
+    R_ba = R_bo
+    V_b4 = V_b3 = V_b2 = V_a2 + np.cross(W_2, R_ba)         # B
+
+    R_cb = R_co - R_bo
+    R_ce = R_co - R_eo
+    W_3, W_5 = solve_Ws(V_b3, R_cb, V_e5, R_ce)
+    V_c5 = V_c3 = V_b3 + np.cross(W_3, R_cb)                # C
+
+    R_fc = R_fo - R_co
+    V_f7 = V_f5 = V_c5 + + np.cross(W_5, R_fc)              # F
+
+    R_db = R_do - R_bo
+    R_de = R_do - R_eo
+    W_4, W_6 = solve_Ws(V_b4, R_db, V_e6, R_de)
+    V_d8 = V_d6 = V_d4 = V_e6 + np.cross(W_6, R_de)         # D
+
+    R_gf = R_go - R_fo
+    R_gd = R_go - R_do
+    W_7, W_8 = solve_Ws(V_f7, R_gf, V_d8, R_gd)
+    V_g8 = V_g7 = V_f7 + np.cross(W_7, R_gf)                # G
+
+    R_hd = R_ho - R_do
+    V_h8 = V_d8 + np.cross(W_8, R_hd)                       # H
+
+
+    # update velocities
+    vel['A'] = V_a2
+    vel['B'] = V_b4
+    vel['C'] = V_c5
+    vel['D'] = V_d8
+    vel['E'] = V_e6
+    vel['F'] = V_f7
+    vel['G'] = V_g8
+    vel['H'] = V_h8
+
+    # update angular velocities
+    ang_vel['W_2'] = W_2
+    ang_vel['W_3'] = W_3
+    ang_vel['W_4'] = W_4
+    ang_vel['W_5'] = W_5
+    ang_vel['W_6'] = W_6
+    ang_vel['W_7'] = W_7
+    ang_vel['W_8'] = W_8
+
+    return
+
+
+'''
+Determine all velocity vectors given input angular velocity W_2. 
+To be invoked after position_analysis to use updated position vectors
+
+updates accl and ang_accl dicts with new values
+'''
+def acceleration_analysis(Alph_2):
+
+    # get current positions
+    R_ao = pos['A']
+    R_bo = pos['B']
+    R_co = pos['C']
+    R_do = pos['D']
+    R_eo = pos['E']
+    R_fo = pos['F']
+    R_go = pos['G']
+    R_ho = pos['H']
+
+    # get current angular velocities of members
+    W_2 = ang_vel['W_2']
+    W_3 = ang_vel['W_3']
+    W_4 = ang_vel['W_4']
+    W_5 = ang_vel['W_5']
+    W_6 = ang_vel['W_6']
+    W_7 = ang_vel['W_7']
+    W_8 = ang_vel['W_8']
+
+    # fixed points
+    A_a2 = np.array([0., 0., 0.], dtype=np.float64)                         # A
+    A_e6 = A_e5 = np.array([0., 0., 0.], dtype=np.float64)                  # E
+
+    # determined points
+    R_ba = R_bo
+    A_b4 = A_b3 = A_b2 = A_a2 + np.cross(Alph_2, R_ba) - (W_2[2]**2)*R_ba   # B
+
+    R_cb = R_co - R_bo
+    R_ce = R_co - R_eo
+    Alph_3, Alph_5 = solve_Alphs(A_b3, R_cb, W_3, A_e5, R_ce, W_5)
+    A_c3 = A_c5 = A_e5 + np.cross(Alph_5, R_ce) - (W_5[2]**2)*R_ce          # C
+
+    R_fc = R_fo - R_co
+    A_f7 = A_f5 = A_c5 + np.cross(Alph_5, R_fc) - (W_5[2]**2)*R_fc          # F
+
+    R_db = R_do - R_bo
+    R_de = R_do - R_eo
+    Alph_4, Alph_6 = solve_Alphs(A_b4, R_db, W_4, A_e6, R_de, W_6)
+    A_d4 = A_d8 = A_d6 = A_e6 + np.cross(Alph_6, R_de) - (W_6[2]**2)*R_de   # D
+
+    R_gf = R_go - R_fo
+    R_gd = R_go - R_do
+    Alph_7, Alph_8 = solve_Alphs(A_f7, R_gf, W_7, A_d8, R_gd, W_8)
+    A_g7 = A_g8 = A_d8 + np.cross(Alph_8, R_gd) - (W_8[2]**2)*R_gd          # G
+
+    R_hd = R_ho - R_do
+    A_h8 = A_d8 + np.cross(Alph_8, R_hd) - (W_8[2]**2)*R_hd                 # H
+
+    # update accelerations
+    accl['A'] = A_a2
+    accl['B'] = A_b4
+    accl['C'] = A_c3
+    accl['D'] = A_d4
+    accl['E'] = A_e6
+    accl['F'] = A_f7
+    accl['G'] = A_g7
+    accl['H'] = A_h8
+
+    # update angular accelerations
+    ang_accl['Alph_2'] = Alph_2
+    ang_accl['Alph_3'] = Alph_3
+    ang_accl['Alph_4'] = Alph_4
+    ang_accl['Alph_5'] = Alph_5
+    ang_accl['Alph_6'] = Alph_6
+    ang_accl['Alph_7'] = Alph_7
+    ang_accl['Alph_8'] = Alph_8
+
+    return
+
+
+'''
+INITIAL STATE (at theta = 0)
+'''
 # solutions to positions determined individually by inspection
-theta = 0.0
 R_ao = np.array([0., 0., 0.], dtype=np.float64)
 R_eo = np.array([-38, -7.8, 0.], dtype=np.float64)
 R_bo = np.array([r_ab, 0., 0.], dtype=np.float64)
@@ -147,94 +363,44 @@ R_do = solve_pos(R_eo, R_bo, r_de, r_bd)[1]
 R_go = solve_pos(R_do, R_fo, r_dg, r_fg)[0]
 R_ho = solve_pos(R_go, R_do, r_gh, r_dh)[1]
 
-print("------ Position Analysis -------")
-print("A: ", R_ao) 
-print("B: ", R_bo)
-print("C: ", R_co)
-print("D: ", R_do)
-print("E: ", R_eo)
-print("F: ", R_fo)
-print("G: ", R_go)
-print("H: ", R_ho)
-print()
+# update initial positions
+pos['A'] = R_ao
+pos['B'] = R_bo
+pos['C'] = R_co
+pos['D'] = R_do
+pos['E'] = R_eo
+pos['F'] = R_fo
+pos['G'] = R_go
+pos['H'] = R_ho
 
-# VELOCITY ANALYSIS
 W_2 = np.array([0., 0., 0.5], dtype=np.float64)   # chosen
-
-# fixed points
-V_a2 = np.array([0., 0., 0.], dtype=np.float64)         # A
-V_e6 = V_e5 = np.array([0., 0., 0.], dtype=np.float64)  # E
-
-# determined points
-R_ba = R_bo
-V_b4 = V_b3 = V_b2 = V_a2 + np.cross(W_2, R_ba)         # B
-
-R_cb = R_co - R_bo
-R_ce = R_co - R_eo
-W_3, W_5 = solve_Ws(V_b3, R_cb, V_e5, R_ce)
-V_c5 = V_c3 = V_b3 + np.cross(W_3, R_cb)                # C
-
-R_fc = R_fo - R_co
-V_f7 = V_f5 = V_c5 + + np.cross(W_5, R_fc)              # F
-
-R_db = R_do - R_bo
-R_de = R_do - R_eo
-W_4, W_6 = solve_Ws(V_b4, R_db, V_e6, R_de)
-V_d8 = V_d6 = V_d4 = V_e6 + np.cross(W_6, R_de)         # D
-
-R_gf = R_go - R_fo
-R_gd = R_go - R_do
-W_7, W_8 = solve_Ws(V_f7, R_gf, V_d8, R_gd)
-V_g8 = V_g7 = V_f7 + np.cross(W_7, R_gf)                # G
-
-R_hd = R_ho - R_do
-V_h8 = V_d8 + np.cross(W_8, R_hd)                       # H
-
-print("------ Velocity Analysis -------")
-print("A: ", V_a2) 
-print("B: ", V_b4)
-print("C: ", V_c5)
-print("D: ", V_d8)
-print("E: ", V_e6)
-print("F: ", V_f7)
-print("G: ", V_g8)
-print("H: ", V_h8)
-print()
-
-# ACCELERATION ANALYSIS
 Alph_2 = np.array([0., 0., 0.], dtype=np.float64) # chosen
 
-# fixed points
-A_a2 = np.array([0., 0., 0.], dtype=np.float64)         # A
-A_e6 = A_e5 = np.array([0., 0., 0.], dtype=np.float64)  # E
-
-# determined points
-A_b4 = A_b3 = A_b2 = A_a2 + np.cross(Alph_2, R_ba) - (W_2[2]**2)*R_ba   # B
-
-Alph_3, Alph_5 = solve_Alphs(A_b3, R_cb, W_3, A_e5, R_ce, W_5)
-A_c3 = A_c5 = A_e5 + np.cross(Alph_5, R_ce) - (W_5[2]**2)*R_ce          # C
-
-A_f7 = A_f5 = A_c5 + np.cross(Alph_5, R_fc) - (W_5[2]**2)*R_fc          # F
-
-Alph_4, Alph_6 = solve_Alphs(A_b4, R_db, W_4, A_e6, R_de, W_6)
-A_d4 = A_d8 = A_d6 = A_e6 + np.cross(Alph_6, R_de) - (W_6[2]**2)*R_de   # D
-
-Alph_7, Alph_8 = solve_Alphs(A_f7, R_gf, W_7, A_d8, R_gd, W_8)
-A_g7 = A_g8 = A_d8 + np.cross(Alph_8, R_gd) - (W_8[2]**2)*R_gd          # G
-
-A_h8 = A_d8 + np.cross(Alph_8, R_hd) - (W_8[2]**2)*R_hd                 # H
-
-print("------ Accelereation Analysis -------")
-print("A: ", A_a2) 
-print("B: ", A_b4)
-print("C: ", A_c3)
-print("D: ", A_d4)
-print("E: ", A_e6)
-print("F: ", A_f7)
-print("G: ", A_g7)
-print("H: ", A_h8)
-print()
+# conduct analysis and update corresponding dicts
+velocity_analysis(W_2)
+acceleration_analysis(Alph_2)
 
 '''
-UPDATED STATE
+UPDATE STATE
+Use current state to calculate and update next state
+at d(theta) = 0.02 rad
 '''
+
+
+d_theta = 0.02  # increment iteration by 0.02 rad
+theta = 0.02    # next input after initial
+
+# look at one full cycle of mechanism
+while(theta < 2*np.pi):
+
+    # analyze previous state
+    # TODO 
+    print("H - theta: ", theta, "\t\t\tposition: ", pos['H'])
+
+    # calculate current state
+    position_analysis(theta)
+    velocity_analysis(ang_vel['W_2'])
+    acceleration_analysis(ang_accl['Alph_2'])
+
+    # advance to next state
+    theta += d_theta
