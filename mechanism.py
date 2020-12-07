@@ -389,22 +389,66 @@ Alph_2 = np.array([0., 0., 0.], dtype=np.float64) # chosen
 velocity_analysis(W_2)
 acceleration_analysis(Alph_2)
 
+
+
+
+
+
 '''
 UPDATE STATE
 Use current state to calculate and update next state
 at d(theta) = 0.02 rad
 '''
 
+# all values deal in magnitudes
+max_disp = {'A': None, 'B': None, 'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'H': None}
+max_speed = {'A': None, 'B': None, 'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'H': None}
+max_accl = {'A': None, 'B': None, 'C': None, 'D': None, 'E': None, 'F': None, 'G': None, 'H': None}
+
+def update_max_disp():
+
+    for point, position in pos.items():
+        curr_disp = np.linalg.norm(position)
+        max_d = max_disp[point]
+
+        if(max_d is None or curr_disp > max_d):
+            max_disp[point] = curr_disp
+
+    return
+
+
+def update_max_speed():
+    for point, velocity in vel.items():
+        curr_speed = np.linalg.norm(velocity)
+        max_v = max_speed[point]
+
+        if(max_v is None or curr_speed > max_v):
+            max_speed[point] = curr_speed
+            
+    return
+
+
+def update_max_accl():
+    for point, acceleration in accl.items():
+        curr_accel = np.linalg.norm(acceleration)
+        max_a = max_accl[point]
+
+        if(max_a is None or curr_accel > max_a):
+            max_accl[point] = curr_accel
+            
+    return
 
 d_theta = 0.02  # increment iteration by 0.02 rad
 theta = 0.02    # next input after initial
+
 
 # look at one full cycle of mechanism
 while(theta < 2*np.pi):
 
     # analyze previous state
-    # TODO 
-    print("H - theta: ", theta, "\t\t\tposition: ", pos['H'])
+    update_max_disp()
+    update_max_speed()
+    update_max_accl()
 
 
     # calculate current state
@@ -414,3 +458,19 @@ while(theta < 2*np.pi):
 
     # advance to next state
     theta += d_theta
+
+
+'''
+Display Results
+'''
+print('----- Max Displacements -----')
+print(max_disp)
+print()
+
+print('----- Max Speeds -----')
+print(max_speed)
+print()
+
+print('----- Max Acceleration Magnitudes -----')
+print(max_accl)
+print()
