@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from sympy import Symbol, sin, cos, atan, nsolve, linsolve
+from sympy import Symbol, linsolve
 import numpy as np
 
 
@@ -30,6 +30,19 @@ accl = {}       # {A, B, C, D, E, F, G, H}
 ang_accl = {}   # {Alph_2, Alph_3, Alph_4, Alph_5, Alph_6, Alph_7, Alph_8}
 
 '''
+Account for precision errors - arccos accepts values in range [-1, 1]
+'''
+def sanitize_arccos_input(angle):
+    
+    if angle > 1:
+        return 1
+    
+    if angle < -1:
+        return -1
+
+    return angle
+
+'''
 solve for angle phi between R and global x axis (i)
 note: phi will have two solutions: phi, phi + pi, 
 return phi: [-pi, pi]
@@ -41,7 +54,7 @@ def angle_with_i(R):
         return phi
     
     # phi_1 and phi_2 are solutions [-pi, pi], phi_1 < phi_2
-    phi_1 = atan(R[1]/R[0]) # [-pi/2, pi/2]
+    phi_1 = np.arctan(R[1]/R[0]) # [-pi/2, pi/2]
     phi_2 = phi_1 + np.pi
     if(phi_1 > 0):
         phi_1 -= np.pi
@@ -57,31 +70,26 @@ def angle_with_i(R):
 Solve for the vector position of Z in triangle XYZ
 return tuple - two possible solutions
 '''
-def solve_pos(R_xo, R_yo, r_zx, r_zy):
-
-    init_guess = np.pi/4    # for solving non-lin equations of angles forming triangle
+def solve_pos(R_xo, R_yo, r_zx, r_yz):
 
     R_yx = R_yo - R_xo
     r_yx = np.linalg.norm(R_yx)
 
-    alpha = Symbol('alpha')
-    beta = Symbol('beta')
-
-    f1 = r_zx * sin(alpha) - r_zy * sin(beta)
-    f2 = r_zx * cos(alpha) + r_zy * cos(beta) - r_yx
-
-    # solve for interior angles
-    sol = nsolve((f1, f2), (alpha, beta), (init_guess, init_guess))
-    alpha_sol = sol[0, 0]
-
-    # get angle of R_yx with x-axis
     phi = angle_with_i(R_yx)
 
+    # find deviation angle, account for precision errors
+    arccos_input = sanitize_arccos_input((r_yx**2 + r_zx**2 - r_yz**2)/(2*r_zx*r_yx))
+    dev_zx = np.arccos(arccos_input)
+
+    # angle between R_zx and i
+    theta_zx_1 = phi + dev_zx
+    theta_zx_2 = phi - dev_zx
+
     # construct vector Z
-    R_zx_1 = np.array([r_zx*cos(phi + alpha_sol), r_zx*sin(phi + alpha_sol), 0], dtype=np.float64)
+    R_zx_1 = np.array([r_zx*np.cos(theta_zx_1), r_zx*np.sin(theta_zx_1), 0], dtype=np.float64)
     R_zo_1 = R_xo + R_zx_1
 
-    R_zx_2 = np.array([r_zx*cos(phi - alpha_sol), r_zx*sin(phi - alpha_sol), 0], dtype=np.float64)
+    R_zx_2 = np.array([r_zx*np.cos(theta_zx_2), r_zx*np.sin(theta_zx_2), 0], dtype=np.float64)
     R_zo_2 = R_xo + R_zx_2
 
     return (R_zo_1, R_zo_2)
@@ -244,6 +252,7 @@ def velocity_analysis(W_2):
     R_gf = R_go - R_fo
     R_gd = R_go - R_do
     W_7, W_8 = solve_Ws(V_f7, R_gf, V_d8, R_gd)
+    
     V_g8 = V_g7 = V_f7 + np.cross(W_7, R_gf)                # G
 
     R_hd = R_ho - R_do
@@ -396,6 +405,7 @@ while(theta < 2*np.pi):
     # analyze previous state
     # TODO 
     print("H - theta: ", theta, "\t\t\tposition: ", pos['H'])
+
 
     # calculate current state
     position_analysis(theta)
