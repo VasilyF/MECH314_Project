@@ -393,10 +393,6 @@ velocity_analysis(W_2)
 acceleration_analysis(Alph_2)
 
 
-
-
-
-
 '''
 UPDATE STATE
 Use current state to calculate and update next state
