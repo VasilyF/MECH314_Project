@@ -498,7 +498,8 @@ print()
 points_to_display = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'}
 
 for pnt in points_to_display:
-    plt.plot(x_vals[pnt], y_vals[pnt])
+    plt.plot(x_vals[pnt], y_vals[pnt], label=pnt)
 
 plt.gca().set_aspect('equal', adjustable='box')
+plt.legend()
 plt.show()
