@@ -2,6 +2,7 @@
 
 from sympy import Symbol, linsolve
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 '''
@@ -119,6 +120,7 @@ def solve_Ws(V_x2, R_zx, V_y3, R_zy):
 
     sol_list = list(linsolve([f1 - f2, f3 - f4], (_w_2, _w_3))) # list of solution tuples
    
+    #print(sol_list)
     # expect only single solution
     _W_2 = np.array([0., 0., sol_list[0][0]], dtype=np.float64)   
     _W_3 = np.array([0., 0., sol_list[0][1]], dtype=np.float64)
@@ -165,10 +167,10 @@ def choose_closest(pos_solutions, previous_pos):
 
         if(chosen_sol is None):
             chosen_sol = sol
-            closest_dist = np.linalg.norm(sol)
+            closest_dist = np.linalg.norm(sol - previous_pos)
             continue
         
-        curr_sol_dist = np.linalg.norm(sol)
+        curr_sol_dist = np.linalg.norm(sol - previous_pos)
         if (curr_sol_dist < closest_dist):
             chosen_sol = sol
             closest_dist = curr_sol_dist
@@ -252,7 +254,8 @@ def velocity_analysis(W_2):
     R_gf = R_go - R_fo
     R_gd = R_go - R_do
     W_7, W_8 = solve_Ws(V_f7, R_gf, V_d8, R_gd)
-    
+    #print("V_f7: ", V_f7, "R_gf: ", R_gf, "V_d8: ", V_d8, "R_gd: ", R_gd)
+    #print("W_7: ", W_7, "\t\t W_8", W_8)
     V_g8 = V_g7 = V_f7 + np.cross(W_7, R_gf)                # G
 
     R_hd = R_ho - R_do
@@ -441,6 +444,14 @@ def update_max_accl():
 d_theta = 0.02  # increment iteration by 0.02 rad
 theta = 0.02    # next input after initial
 
+x_vals = {}
+y_vals = {}
+
+# create list to display position coords
+for pnt in pos.keys():
+    x_vals[pnt] = []
+    y_vals[pnt] = []
+
 
 # look at one full cycle of mechanism
 while(theta < 2*np.pi):
@@ -449,6 +460,11 @@ while(theta < 2*np.pi):
     update_max_disp()
     update_max_speed()
     update_max_accl()
+
+    # add current point to list
+    for pnt, coord in pos.items():
+        x_vals[pnt].append(coord[0])
+        y_vals[pnt].append(coord[1])
 
 
     # calculate current state
@@ -464,13 +480,25 @@ while(theta < 2*np.pi):
 Display Results
 '''
 print('----- Max Displacements -----')
-print(max_disp)
+for pnt, disp in max_disp.items():
+    print(pnt, disp)
 print()
 
 print('----- Max Speeds -----')
-print(max_speed)
+for pnt, speed in max_speed.items():
+    print(pnt, speed)
 print()
 
 print('----- Max Acceleration Magnitudes -----')
-print(max_accl)
+for pnt, accel in max_accl.items():
+    print(pnt, accel)
 print()
+
+# plot history of points
+points_to_display = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'}
+
+for pnt in points_to_display:
+    plt.plot(x_vals[pnt], y_vals[pnt])
+
+plt.gca().set_aspect('equal', adjustable='box')
+plt.show()
